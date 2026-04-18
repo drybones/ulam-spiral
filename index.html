@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prime Spiral</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --sidebar-w: 264px;
+  --bg: #0a0a0f;
+  --panel: rgba(22,22,38,0.97);
+  --border: rgba(255,255,255,0.11);
+  --text: rgba(255,255,255,0.85);
+  --text-dim: rgba(255,255,255,0.42);
+  --ui-accent: #7ba7e0;
+  --radius: 6px;
+  --transition: 0.18s ease;
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* ── Canvas ── */
+#canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: calc(100vw - var(--sidebar-w));
+  height: 100vh;
+  display: block;
+}
+
+body.collapsed #canvas {
+  width: 100vw;
+}
+
+/* ── Sidebar ── */
+#sidebar {
+  position: fixed;
+  top: 0; right: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+  transition: transform var(--transition), width var(--transition);
+  z-index: 100;
+}
+
+body.collapsed #sidebar {
+  transform: translateX(var(--sidebar-w));
+}
+
+#collapse-btn {
+  position: fixed;
+  top: 50%;
+  right: var(--sidebar-w);
+  transform: translateY(-50%);
+  width: 20px;
+  height: 48px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius) 0 0 var(--radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 10px;
+  transition: right var(--transition), color var(--transition);
+  z-index: 101;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+#collapse-btn:hover { color: var(--text); }
+
+body.collapsed #collapse-btn {
+  right: 0;
+}
+
+/* ── Sidebar inner layout ── */
+.sidebar-inner {
+  padding: 16px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: var(--sidebar-w);
+}
+
+.section-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+/* ── Preset swatches ── */
+.presets {
+  display: flex;
+  gap: 8px;
+}
+
+.preset-swatch {
+  flex: 1;
+  height: 36px;
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color var(--transition), transform var(--transition);
+  outline: none;
+}
+
+.preset-swatch:hover { transform: scale(1.06); }
+.preset-swatch.active { border-color: rgba(255,255,255,0.7); }
+
+.preset-swatch span {
+  position: absolute;
+  bottom: 2px; left: 0; right: 0;
+  text-align: center;
+  font-size: 8px;
+  color: rgba(255,255,255,0.7);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+
+/* ── Controls ── */
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.ctrl-row label { color: var(--text-dim); }
+.ctrl-row .val { color: var(--text); font-variant-numeric: tabular-nums; }
+
+input[type=range] {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.22);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  border: 2px solid rgba(22,22,38,1);
+  box-shadow: 0 0 6px rgba(123,167,224,0.6);
+  transition: box-shadow var(--transition);
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 10px rgba(123,167,224,0.9);
+}
+
+input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  border: 2px solid rgba(22,22,38,1);
+  box-shadow: 0 0 6px rgba(123,167,224,0.6);
+  cursor: pointer;
+}
+
+input[type=color] {
+  width: 32px; height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+}
+
+/* ── Color mode toggle ── */
+.mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 5px 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  transition: background var(--transition), color var(--transition);
+  outline: none;
+}
+
+.mode-btn.active {
+  background: rgba(255,255,255,0.1);
+  color: var(--text);
+}
+
+.mode-btn:not(:last-child) { border-right: 1px solid var(--border); }
+
+/* ── Checkbox toggle ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.toggle-row label { color: var(--text-dim); cursor: pointer; }
+
+input[type=checkbox] {
+  width: 14px; height: 14px;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+}
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 -14px;
+}
+
+
+/* ── Buttons ── */
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  outline: none;
+  text-align: center;
+}
+
+.btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* ── Highlight section ── */
+#ctrl-highlight-nums {
+  width: 100%;
+  height: 64px;
+  resize: vertical;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color var(--transition);
+  margin-bottom: 6px;
+}
+
+#ctrl-highlight-nums:focus { border-color: rgba(255,255,255,0.22); }
+#ctrl-highlight-nums::placeholder { color: var(--text-dim); }
+
+.hl-status {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  min-height: 13px;
+}
+
+.hl-status .hl-count { color: var(--text); }
+.hl-status .hl-warn  { color: #fbbf24; }
+
+/* ── SVG warning toast ── */
+#svg-warning {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,20,0,0.95);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: rgba(251,191,36,0.9);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 10px;
+  display: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  #canvas { width: 100vw !important; }
+  #sidebar { transform: translateX(100%); box-shadow: none; }
+  body.mobile-open #sidebar {
+    transform: translateX(0);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.4);
+  }
+  #collapse-btn {
+    top: 10px; right: 10px;
+    transform: none;
+    width: 36px; height: 36px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    z-index: 102;
+  }
+}
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<button id="collapse-btn" aria-label="Toggle sidebar">&#8250;</button>
+
+<aside id="sidebar">
+  <div class="sidebar-inner">
+
+    <!-- Presets -->
+    <div>
+      <div class="section-label">Preset</div>
+      <div class="presets">
+        <button class="preset-swatch active" data-preset="mono"  style="background:linear-gradient(135deg,#f8f8f6,#d8d8d4)" aria-label="Mono"><span>Mono</span></button>
+        <button class="preset-swatch"        data-preset="slate" style="background:linear-gradient(135deg,#edf2f7,#c5d3e8)" aria-label="Slate"><span>Slate</span></button>
+        <button class="preset-swatch"        data-preset="sand"  style="background:linear-gradient(135deg,#faf3e6,#e8d9b8)" aria-label="Sand"><span>Sand</span></button>
+        <button class="preset-swatch"        data-preset="sage"  style="background:linear-gradient(135deg,#eaf3ec,#c0dbc5)" aria-label="Sage"><span>Sage</span></button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- N -->
+    <div>
+      <div class="ctrl-row">
+        <label for="ctrl-n">Points (N)</label>
+        <span class="val" id="ctrl-n-val">3000</span>
+      </div>
+      <input type="range" id="ctrl-n" min="500" max="30000" step="100" value="3000">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Colour -->
+    <div>
+      <div class="section-label">Colour</div>
+      <div class="ctrl-row">
+        <label>Prime colour</label>
+        <input type="color" id="ctrl-prime-color" value="#1a1a1a">
+      </div>
+      <div class="ctrl-row" style="margin-bottom:6px">
+        <label>Mode</label>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-color-mode="solid">Solid</button>
+        <button class="mode-btn" data-color-mode="radial">Radial</button>
+        <button class="mode-btn" data-color-mode="arc">Arc</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Dots -->
+    <div>
+      <div class="section-label">Dots</div>
+      <div class="ctrl-row">
+        <label for="ctrl-prime-r">Prime size</label>
+        <span class="val" id="ctrl-prime-r-val">2.5</span>
+      </div>
+      <input type="range" id="ctrl-prime-r" min="1" max="6" step="0.5" value="2.5">
+      <div class="ctrl-row">
+        <label for="ctrl-glow">Glow</label>
+        <span class="val" id="ctrl-glow-val">0</span>
+      </div>
+      <input type="range" id="ctrl-glow" min="0" max="30" step="1" value="0">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Composites -->
+    <div>
+      <div class="section-label">Composites</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="ctrl-show-comp" checked>
+        <label for="ctrl-show-comp">Show composite numbers</label>
+      </div>
+      <div class="ctrl-row">
+        <label for="ctrl-comp-opacity">Opacity</label>
+        <span class="val" id="ctrl-comp-opacity-val">0.18</span>
+      </div>
+      <input type="range" id="ctrl-comp-opacity" min="0" max="0.5" step="0.01" value="0.18">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Highlight specific primes -->
+    <div>
+      <div class="section-label">Highlight primes</div>
+      <textarea id="ctrl-highlight-nums" placeholder="e.g. 2, 3, 5, 41, 1999&#10;comma, space or newline separated"></textarea>
+      <div class="hl-status" id="hl-status"></div>
+      <div class="ctrl-row">
+        <label>Highlight colour</label>
+        <input type="color" id="ctrl-hl-color" value="#ff6b6b">
+      </div>
+      <div class="ctrl-row">
+        <label for="ctrl-hl-r">Highlight size</label>
+        <span class="val" id="ctrl-hl-r-val">4.5</span>
+      </div>
+      <input type="range" id="ctrl-hl-r" min="2" max="12" step="0.5" value="4.5">
+      <div class="ctrl-row">
+        <label for="ctrl-hl-glow">Glow</label>
+        <span class="val" id="ctrl-hl-glow-val">12</span>
+      </div>
+      <input type="range" id="ctrl-hl-glow" min="0" max="40" step="1" value="12">
+      <div class="ctrl-row">
+        <label for="ctrl-hl-ring-offset">Ring radius</label>
+        <span class="val" id="ctrl-hl-ring-offset-val">3.0</span>
+      </div>
+      <input type="range" id="ctrl-hl-ring-offset" min="0" max="12" step="0.5" value="3">
+      <div class="ctrl-row">
+        <label for="ctrl-hl-ring-width">Ring thickness</label>
+        <span class="val" id="ctrl-hl-ring-width-val">1.5</span>
+      </div>
+      <input type="range" id="ctrl-hl-ring-width" min="0.5" max="4" step="0.5" value="1.5">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Export -->
+    <div>
+      <div class="section-label">Export</div>
+      <div class="toggle-row" style="margin-bottom:10px">
+        <input type="checkbox" id="ctrl-transparent-bg">
+        <label for="ctrl-transparent-bg">Transparent background</label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-png">↓ PNG</button>
+        <button class="btn" id="btn-svg">↓ SVG</button>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+<div id="svg-warning">Large SVG — this may take a moment…</div>
+
+<script>
+'use strict';
+
+// ── Constants ───────────────────────────────────────────────────────────────
+const TAU = Math.PI * 2;
+const PHI = (1 + Math.sqrt(5)) / 2;
+const GOLDEN_ANGLE = TAU / (PHI * PHI); // ~2.39996 rad
+
+const PRESETS = {
+  mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, primeR:2.5, spiralScale:1, rotation:0 },
+  slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
+  sand:  { bgColor:'#faf3e6', primeColor:'#b84820', colorMode:'arc',    glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
+  sage:  { bgColor:'#eaf3ec', primeColor:'#1e5c3a', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+const state = {
+  N: 3000,
+  primeColor: '#1a1a1a',
+  bgColor: '#f8f8f6',
+  colorMode: 'solid',
+  primeR: 2.5,
+  glowIntensity: 0,
+  showComposites: true,
+  compositeOpacity: 0.18,
+  spiralScale: 1.0,
+  rotation: 0,
+  isPrime: null,
+  cachedN: 0,
+  highlightedNums: new Set(),
+  highlightColor: '#ff6b6b',
+  highlightR: 4.5,
+  highlightGlow: 12,
+  highlightRingOffset: 3,
+  highlightRingWidth: 1.5,
+  transparentBg: false,
+
+};
+
+// ── Sieve of Eratosthenes ────────────────────────────────────────────────────
+function buildSieve(n) {
+  const a = new Uint8Array(n + 1).fill(1);
+  a[0] = a[1] = 0;
+  for (let i = 2; i * i <= n; i++) {
+    if (a[i]) for (let j = i * i; j <= n; j += i) a[j] = 0;
+  }
+  return a;
+}
+
+function ensureSieve(n) {
+  if (n !== state.cachedN) {
+    state.isPrime = buildSieve(n);
+    state.cachedN = n;
+  }
+}
+
+// ── Highlight parsing ────────────────────────────────────────────────────────
+function parseHighlights(raw) {
+  ensureSieve(state.N);
+  const tokens = raw.split(/[\s,]+/).filter(Boolean);
+  const valid = new Set();
+  let outOfRange = 0, notPrime = 0;
+  for (const tok of tokens) {
+    const n = parseInt(tok, 10);
+    if (!Number.isFinite(n) || n < 2) continue;
+    if (n > state.N) { outOfRange++; continue; }
+    if (!state.isPrime[n]) { notPrime++; continue; }
+    valid.add(n);
+  }
+  state.highlightedNums = valid;
+
+  const statusEl = document.getElementById('hl-status');
+  const parts = [];
+  if (valid.size > 0) parts.push(`<span class="hl-count">${valid.size} highlighted</span>`);
+  if (outOfRange > 0) parts.push(`<span class="hl-warn">${outOfRange} exceed N</span>`);
+  if (notPrime > 0)   parts.push(`<span class="hl-warn">${notPrime} not prime</span>`);
+  statusEl.innerHTML = parts.join(' · ');
+
+  scheduleRender();
+}
+
+// ── Colour helpers ───────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+function hexToHsl(hex) {
+  let [r, g, b] = hexToRgb(hex).map(x => x / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      default: h = ((r - g) / d + 4) / 6;
+    }
+  }
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+// ── Gradient builder ─────────────────────────────────────────────────────────
+function buildGradient(ctx, cx, cy, maxR, st) {
+  const [h] = hexToHsl(st.primeColor);
+  if (st.colorMode === 'radial') {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    g.addColorStop(0,    `hsl(${h},       90%, 78%)`);
+    g.addColorStop(0.35, `hsl(${(h+40)%360}, 82%, 66%)`);
+    g.addColorStop(1.0,  `hsl(${(h+120)%360},72%, 54%)`);
+    return g;
+  }
+  if (st.colorMode === 'arc') {
+    let g;
+    try {
+      g = ctx.createConicGradient(st.rotation, cx, cy);
+    } catch (e) {
+      // Fallback for browsers without createConicGradient
+      return st.primeColor;
+    }
+    g.addColorStop(0,    `hsl(${h},           85%, 65%)`);
+    g.addColorStop(0.25, `hsl(${(h+60)%360},  85%, 65%)`);
+    g.addColorStop(0.5,  `hsl(${(h+120)%360}, 85%, 65%)`);
+    g.addColorStop(0.75, `hsl(${(h+200)%360}, 85%, 65%)`);
+    g.addColorStop(1.0,  `hsl(${h},           85%, 65%)`);
+    return g;
+  }
+  return st.primeColor;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(ctx, st, W, H, skipBg = false) {
+  const cx = W / 2, cy = H / 2;
+  const N = st.N;
+  const isPrime = st.isPrime;
+
+  // Auto-scale so spiral fills canvas with 4% margin
+  const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * st.spiralScale;
+  const maxR = effectiveScale * Math.sqrt(N);
+
+  // Background
+  if (skipBg) {
+    ctx.clearRect(0, 0, W, H);
+  } else {
+    ctx.fillStyle = st.bgColor;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const rot = st.rotation;
+
+  // ── Pass 1: Composites ──
+  if (st.showComposites && st.compositeOpacity > 0.004) {
+    const [r, g, b] = hexToRgb(st.primeColor);
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = st.compositeOpacity;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.beginPath();
+    const compR = Math.max(0.6, st.primeR * 0.45);
+    for (let n = 4; n <= N; n++) {
+      if (isPrime[n]) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const rr = effectiveScale * Math.sqrt(n);
+      const x = cx + rr * Math.cos(a);
+      const y = cy + rr * Math.sin(a);
+      ctx.moveTo(x + compR, y);
+      ctx.arc(x, y, compR, 0, TAU);
+    }
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Pass 2: Primes ──
+  ctx.save();
+  const glow = st.N > 20000 ? Math.min(st.glowIntensity, 20) : st.glowIntensity;
+  ctx.shadowColor = st.primeColor;
+  ctx.shadowBlur = glow;
+  ctx.beginPath();
+  for (let n = 2; n <= N; n++) {
+    if (!isPrime[n]) continue;
+    if (st.highlightedNums.has(n)) continue; // drawn in pass 3
+    const a = n * GOLDEN_ANGLE + rot;
+    const rr = effectiveScale * Math.sqrt(n);
+    const x = cx + rr * Math.cos(a);
+    const y = cy + rr * Math.sin(a);
+    ctx.moveTo(x + st.primeR, y);
+    ctx.arc(x, y, st.primeR, 0, TAU);
+  }
+  ctx.fillStyle = st.colorMode === 'solid'
+    ? st.primeColor
+    : buildGradient(ctx, cx, cy, maxR, st);
+  ctx.fill();
+  ctx.restore();
+
+  // ── Pass 3: Highlighted primes ──
+  if (st.highlightedNums.size > 0) {
+    ctx.save();
+    ctx.shadowColor = st.highlightColor;
+    ctx.shadowBlur = st.highlightGlow;
+
+    if (st.highlightRingOffset > 0 && st.highlightRingWidth > 0) {
+      ctx.strokeStyle = st.highlightColor;
+      ctx.lineWidth = st.highlightRingWidth;
+      ctx.beginPath();
+      for (const n of st.highlightedNums) {
+        if (n < 2 || n > N || !isPrime[n]) continue;
+        const a = n * GOLDEN_ANGLE + rot;
+        const rr = effectiveScale * Math.sqrt(n);
+        const x = cx + rr * Math.cos(a);
+        const y = cy + rr * Math.sin(a);
+        const ringR = st.highlightR + st.highlightRingOffset;
+        ctx.moveTo(x + ringR, y);
+        ctx.arc(x, y, ringR, 0, TAU);
+      }
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = st.highlightColor;
+    ctx.beginPath();
+    for (const n of st.highlightedNums) {
+      if (n < 2 || n > N || !isPrime[n]) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const rr = effectiveScale * Math.sqrt(n);
+      const x = cx + rr * Math.cos(a);
+      const y = cy + rr * Math.sin(a);
+      ctx.moveTo(x + st.highlightR, y);
+      ctx.arc(x, y, st.highlightR, 0, TAU);
+    }
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let logicalW = 0, logicalH = 0;
+
+function resizeCanvas() {
+  const sidebar = document.getElementById('sidebar');
+  const sidebarVisible = !document.body.classList.contains('collapsed');
+  const sidebarW = sidebarVisible ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) : 0;
+  logicalW = window.innerWidth - sidebarW;
+  logicalH = window.innerHeight;
+  canvas.style.width  = logicalW + 'px';
+  canvas.style.height = logicalH + 'px';
+  canvas.width  = logicalW * DPR;
+  canvas.height = logicalH * DPR;
+  ctx.scale(DPR, DPR);
+  scheduleRender();
+}
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'prime-spiral-v1';
+const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
+
+function saveSettings() {
+  const data = {};
+  for (const k of PERSIST_KEYS) data[k] = state[k];
+  data.highlightedNums = [...state.highlightedNums];
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    for (const k of PERSIST_KEYS) {
+      if (data[k] !== undefined) state[k] = data[k];
+    }
+    if (Array.isArray(data.highlightedNums)) {
+      state.highlightedNums = new Set(data.highlightedNums);
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+function syncDomToState() {
+  document.getElementById('ctrl-n').value                      = state.N;
+  document.getElementById('ctrl-n-val').textContent            = state.N;
+  document.getElementById('ctrl-prime-color').value            = state.primeColor;
+  document.getElementById('ctrl-glow').value                   = state.glowIntensity;
+  document.getElementById('ctrl-glow-val').textContent         = state.glowIntensity;
+  document.getElementById('ctrl-show-comp').checked            = state.showComposites;
+  document.getElementById('ctrl-comp-opacity').value           = state.compositeOpacity;
+  document.getElementById('ctrl-comp-opacity-val').textContent = state.compositeOpacity.toFixed(2);
+  document.getElementById('ctrl-prime-r').value                = state.primeR;
+  document.getElementById('ctrl-prime-r-val').textContent      = state.primeR;
+  document.getElementById('ctrl-hl-color').value               = state.highlightColor;
+  document.getElementById('ctrl-hl-r').value                        = state.highlightR;
+  document.getElementById('ctrl-hl-r-val').textContent             = state.highlightR;
+  document.getElementById('ctrl-hl-glow').value                    = state.highlightGlow;
+  document.getElementById('ctrl-hl-glow-val').textContent          = state.highlightGlow;
+  document.getElementById('ctrl-hl-ring-offset').value             = state.highlightRingOffset;
+  document.getElementById('ctrl-hl-ring-offset-val').textContent   = state.highlightRingOffset.toFixed(1);
+  document.getElementById('ctrl-hl-ring-width').value              = state.highlightRingWidth;
+  document.getElementById('ctrl-hl-ring-width-val').textContent    = state.highlightRingWidth;
+  document.getElementById('ctrl-transparent-bg').checked           = state.transparentBg;
+  document.querySelectorAll('[data-color-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.colorMode === state.colorMode);
+  });
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
+  if (state.highlightedNums.size > 0) {
+    document.getElementById('ctrl-highlight-nums').value = [...state.highlightedNums].join(', ');
+  }
+}
+
+// ── Render scheduling ─────────────────────────────────────────────────────────
+let rafPending = false;
+let saveTimer  = null;
+function scheduleRender() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveSettings, 500);
+  if (!rafPending) {
+    rafPending = true;
+    requestAnimationFrame(() => {
+      ensureSieve(state.N);
+      render(ctx, state, logicalW, logicalH);
+      rafPending = false;
+    });
+  }
+}
+
+// ── Controls wiring ───────────────────────────────────────────────────────────
+let nDebounceTimer = null;
+
+function initControls() {
+  // N slider — debounced sieve
+  const nSlider = document.getElementById('ctrl-n');
+  const nVal    = document.getElementById('ctrl-n-val');
+  nSlider.addEventListener('input', () => {
+    nVal.textContent = nSlider.value;
+    state.N = parseInt(nSlider.value);
+    clearTimeout(nDebounceTimer);
+    nDebounceTimer = setTimeout(scheduleRender, 80);
+  });
+
+  // Prime color
+  const primeColorInput = document.getElementById('ctrl-prime-color');
+  primeColorInput.addEventListener('input', () => {
+    state.primeColor = primeColorInput.value;
+      scheduleRender();
+  });
+
+  // Prime dot size
+  const primeRInput = document.getElementById('ctrl-prime-r');
+  const primeRVal   = document.getElementById('ctrl-prime-r-val');
+  primeRInput.addEventListener('input', () => {
+    state.primeR = parseFloat(primeRInput.value);
+    primeRVal.textContent = primeRInput.value;
+    scheduleRender();
+  });
+
+  // Glow
+  const glowInput = document.getElementById('ctrl-glow');
+  const glowVal   = document.getElementById('ctrl-glow-val');
+  glowInput.addEventListener('input', () => {
+    state.glowIntensity = parseFloat(glowInput.value);
+    glowVal.textContent = glowInput.value;
+    scheduleRender();
+  });
+
+  // Show composites
+  const showCompInput = document.getElementById('ctrl-show-comp');
+  const compOpInput   = document.getElementById('ctrl-comp-opacity');
+  showCompInput.addEventListener('change', () => {
+    state.showComposites = showCompInput.checked;
+    compOpInput.disabled = !state.showComposites;
+    scheduleRender();
+  });
+
+  // Composite opacity
+  const compOpVal = document.getElementById('ctrl-comp-opacity-val');
+  compOpInput.addEventListener('input', () => {
+    state.compositeOpacity = parseFloat(compOpInput.value);
+    compOpVal.textContent = parseFloat(compOpInput.value).toFixed(2);
+    scheduleRender();
+  });
+
+  // Color mode buttons
+  document.querySelectorAll('[data-color-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.colorMode = btn.dataset.colorMode;
+      document.querySelectorAll('[data-color-mode]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduleRender();
+    });
+  });
+
+  // Preset swatches
+  document.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyPreset(btn.dataset.preset);
+      document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Collapse button
+  const collapseBtn = document.getElementById('collapse-btn');
+  collapseBtn.addEventListener('click', () => {
+    if (window.innerWidth <= 768) {
+      document.body.classList.toggle('mobile-open');
+    } else {
+      document.body.classList.toggle('collapsed');
+      setTimeout(resizeCanvas, 220);
+    }
+  });
+
+  // Highlight textarea — re-parse on change; also re-validate when N changes
+  const hlTextarea = document.getElementById('ctrl-highlight-nums');
+  hlTextarea.addEventListener('input', () => parseHighlights(hlTextarea.value));
+
+  // Re-run highlight parse after N debounce so out-of-range warnings update
+  const _origNChange = nDebounceTimer;
+  const origNSliderInput = nSlider.oninput;
+  nSlider.addEventListener('input', () => {
+    clearTimeout(nDebounceTimer);
+    nDebounceTimer = setTimeout(() => {
+      parseHighlights(hlTextarea.value);
+    }, 80);
+  });
+
+  // Highlight colour
+  const hlColorInput = document.getElementById('ctrl-hl-color');
+  hlColorInput.addEventListener('input', () => {
+    state.highlightColor = hlColorInput.value;
+    scheduleRender();
+  });
+
+  // Highlight size
+  const hlRInput = document.getElementById('ctrl-hl-r');
+  const hlRVal   = document.getElementById('ctrl-hl-r-val');
+  hlRInput.addEventListener('input', () => {
+    state.highlightR = parseFloat(hlRInput.value);
+    hlRVal.textContent = hlRInput.value;
+    scheduleRender();
+  });
+
+  const hlGlowInput = document.getElementById('ctrl-hl-glow');
+  const hlGlowVal   = document.getElementById('ctrl-hl-glow-val');
+  hlGlowInput.addEventListener('input', () => {
+    state.highlightGlow = parseFloat(hlGlowInput.value);
+    hlGlowVal.textContent = hlGlowInput.value;
+    scheduleRender();
+  });
+
+  const hlRingOffsetInput = document.getElementById('ctrl-hl-ring-offset');
+  const hlRingOffsetVal   = document.getElementById('ctrl-hl-ring-offset-val');
+  hlRingOffsetInput.addEventListener('input', () => {
+    state.highlightRingOffset = parseFloat(hlRingOffsetInput.value);
+    hlRingOffsetVal.textContent = parseFloat(hlRingOffsetInput.value).toFixed(1);
+    scheduleRender();
+  });
+
+  const hlRingWidthInput = document.getElementById('ctrl-hl-ring-width');
+  const hlRingWidthVal   = document.getElementById('ctrl-hl-ring-width-val');
+  hlRingWidthInput.addEventListener('input', () => {
+    state.highlightRingWidth = parseFloat(hlRingWidthInput.value);
+    hlRingWidthVal.textContent = hlRingWidthInput.value;
+    scheduleRender();
+  });
+
+  document.getElementById('ctrl-transparent-bg').addEventListener('change', e => {
+    state.transparentBg = e.target.checked;
+    scheduleRender();
+  });
+
+  // Export
+  document.getElementById('btn-png').addEventListener('click', exportPng);
+  document.getElementById('btn-svg').addEventListener('click', exportSvg);
+}
+
+// ── Apply preset ──────────────────────────────────────────────────────────────
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  Object.assign(state, p);
+
+  // Update DOM
+  document.getElementById('ctrl-prime-color').value    = p.primeColor;
+  document.getElementById('ctrl-glow').value           = p.glowIntensity;
+  document.getElementById('ctrl-glow-val').textContent = p.glowIntensity;
+  document.getElementById('ctrl-show-comp').checked    = p.showComposites;
+  document.getElementById('ctrl-comp-opacity').value   = p.compositeOpacity;
+  document.getElementById('ctrl-comp-opacity-val').textContent = p.compositeOpacity.toFixed(2);
+  document.getElementById('ctrl-prime-r').value        = p.primeR;
+  document.getElementById('ctrl-prime-r-val').textContent = p.primeR;
+  document.documentElement.style.setProperty('--accent', p.primeColor);
+
+  document.querySelectorAll('[data-color-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.colorMode === p.colorMode);
+  });
+
+  scheduleRender();
+}
+
+// ── PNG export ────────────────────────────────────────────────────────────────
+function exportPng() {
+  const scale = 2;
+  const oc = document.createElement('canvas');
+  oc.width  = logicalW * scale;
+  oc.height = logicalH * scale;
+  const octx = oc.getContext('2d');
+  octx.scale(scale, scale);
+  ensureSieve(state.N);
+  render(octx, state, logicalW, logicalH, state.transparentBg);
+  oc.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `prime-spiral-N${state.N}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }, 'image/png');
+}
+
+// ── SVG export ────────────────────────────────────────────────────────────────
+function dotColor(n, effectiveScale, maxR, st) {
+  const [h] = hexToHsl(st.primeColor);
+  if (st.colorMode === 'solid') return st.primeColor;
+  const a = n * GOLDEN_ANGLE + st.rotation;
+  const r = effectiveScale * Math.sqrt(n);
+  if (st.colorMode === 'radial') {
+    const t = r / maxR;
+    const dh = t * 120;
+    const hl = 78 - t * 24;
+    return `hsl(${(h + dh) % 360},${82}%,${Math.round(hl)}%)`;
+  }
+  if (st.colorMode === 'arc') {
+    const norm = ((a % TAU) + TAU) % TAU / TAU;
+    const dh = norm * 200;
+    return `hsl(${(h + dh) % 360},85%,65%)`;
+  }
+  return st.primeColor;
+}
+
+function exportSvg() {
+  const N = state.N;
+  const warning = document.getElementById('svg-warning');
+  if (N > 10000) { warning.style.display = 'block'; setTimeout(() => warning.style.display = 'none', 3000); }
+
+  ensureSieve(N);
+  const isPrime = state.isPrime;
+  const W = logicalW, H = logicalH;
+  const cx = W / 2, cy = H / 2;
+  const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * state.spiralScale;
+  const maxR = effectiveScale * Math.sqrt(N);
+  const rot = state.rotation;
+  const compR = Math.max(0.6, state.primeR * 0.45);
+  const [pr, pg, pb] = hexToRgb(state.primeColor);
+  const glow = state.glowIntensity;
+
+  const parts = [];
+  parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
+
+  // Glow filter
+  if (glow > 0) {
+    parts.push(`<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">`);
+    parts.push(`<feGaussianBlur in="SourceGraphic" stdDeviation="${(glow * 0.4).toFixed(1)}" result="blur"/>`);
+    parts.push(`<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>`);
+    parts.push(`</filter></defs>`);
+  }
+
+  // Background
+  if (!state.transparentBg) {
+    parts.push(`<rect width="${W}" height="${H}" fill="${state.bgColor}"/>`);
+  }
+
+  // Composites
+  if (state.showComposites && state.compositeOpacity > 0.004) {
+    parts.push(`<g opacity="${state.compositeOpacity.toFixed(3)}" fill="rgb(${pr},${pg},${pb})">`);
+    for (let n = 4; n <= N; n++) {
+      if (isPrime[n]) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const r = effectiveScale * Math.sqrt(n);
+      const x = (cx + r * Math.cos(a)).toFixed(2);
+      const y = (cy + r * Math.sin(a)).toFixed(2);
+      parts.push(`<circle cx="${x}" cy="${y}" r="${compR.toFixed(2)}"/>`);
+    }
+    parts.push(`</g>`);
+  }
+
+  // Primes (skip highlighted ones — drawn separately on top)
+  const filterAttr = glow > 0 ? ' filter="url(#glow)"' : '';
+  parts.push(`<g${filterAttr}>`);
+  for (let n = 2; n <= N; n++) {
+    if (!isPrime[n]) continue;
+    if (state.highlightedNums.has(n)) continue;
+    const a = n * GOLDEN_ANGLE + rot;
+    const r = effectiveScale * Math.sqrt(n);
+    const x = (cx + r * Math.cos(a)).toFixed(2);
+    const y = (cy + r * Math.sin(a)).toFixed(2);
+    const fill = dotColor(n, effectiveScale, maxR, state);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${state.primeR}" fill="${fill}"/>`);
+  }
+  parts.push(`</g>`);
+
+  // Highlighted primes — ring + filled dot
+  if (state.highlightedNums.size > 0) {
+    const hlGlow = state.highlightGlow;
+    const hlFilterId = 'hl-glow';
+    if (!parts.some(p => p.includes(hlFilterId))) {
+      // Inject hl filter into defs or add new defs
+      const defsEnd = parts.findIndex(p => p.includes('</defs>'));
+      const hlFilter = `<filter id="${hlFilterId}" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="${(hlGlow * 0.4).toFixed(1)}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+      if (defsEnd >= 0) {
+        parts[defsEnd] = hlFilter + parts[defsEnd];
+      } else {
+        const bgIdx = parts.findIndex(p => p.startsWith('<rect'));
+        parts.splice(bgIdx, 0, `<defs>${hlFilter}</defs>`);
+      }
+    }
+    const hlFilterAttr = ` filter="url(#${hlFilterId})"`;
+    parts.push(`<g${hlFilterAttr}>`);
+    for (const n of state.highlightedNums) {
+      if (n < 2 || n > N || !isPrime[n]) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const r = effectiveScale * Math.sqrt(n);
+      const x = (cx + r * Math.cos(a)).toFixed(2);
+      const y = (cy + r * Math.sin(a)).toFixed(2);
+      if (state.highlightRingOffset > 0 && state.highlightRingWidth > 0) {
+        const ringR = (state.highlightR + state.highlightRingOffset).toFixed(2);
+        parts.push(`<circle cx="${x}" cy="${y}" r="${ringR}" fill="none" stroke="${state.highlightColor}" stroke-width="${state.highlightRingWidth}"/>`);
+      }
+      parts.push(`<circle cx="${x}" cy="${y}" r="${state.highlightR}" fill="${state.highlightColor}"/>`);
+    }
+    parts.push(`</g>`);
+  }
+  parts.push(`</svg>`);
+
+  const blob = new Blob([parts.join('\n')], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `prime-spiral-N${N}.svg`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  const hadSaved = loadSettings();
+  initControls();
+  if (hadSaved) {
+    syncDomToState();
+    const hlTextarea = document.getElementById('ctrl-highlight-nums');
+    if (hlTextarea.value) parseHighlights(hlTextarea.value);
+  }
+  let lastKnownWidth = window.innerWidth;
+  resizeCanvas();
+  window.addEventListener('resize', () => {
+    const w = window.innerWidth;
+    if (w === lastKnownWidth && w <= 768) return;
+    lastKnownWidth = w;
+    resizeCanvas();
+  });
+}
+
+init();
+</script>
+</body>
+</html>
