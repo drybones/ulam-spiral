@@ -726,9 +726,10 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2);
 let logicalW = 0, logicalH = 0;
 
 function resizeCanvas() {
-  const sidebar = document.getElementById('sidebar');
-  const sidebarVisible = !document.body.classList.contains('collapsed');
-  const sidebarW = sidebarVisible ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) : 0;
+  const isMobile = window.innerWidth <= 768;
+  const sidebarW = (!isMobile && !document.body.classList.contains('collapsed'))
+    ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'))
+    : 0;
   logicalW = window.innerWidth - sidebarW;
   logicalH = window.innerHeight;
   canvas.style.width  = logicalW + 'px';
