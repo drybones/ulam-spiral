@@ -31,13 +31,13 @@ html, body {
 #canvas {
   position: fixed;
   top: 0; left: 0;
-  width: calc(100vw - var(--sidebar-w));
+  width: 100vw;
   height: 100vh;
   display: block;
 }
 
-body.collapsed #canvas {
-  width: 100vw;
+body.sidebar-open #canvas {
+  width: calc(100vw - var(--sidebar-w));
 }
 
 /* ── Sidebar ── */
@@ -60,14 +60,18 @@ body.collapsed #canvas {
   z-index: 100;
 }
 
-body.collapsed #sidebar {
+#sidebar {
   transform: translateX(var(--sidebar-w));
+}
+
+body.sidebar-open #sidebar {
+  transform: translateX(0);
 }
 
 #collapse-btn {
   position: fixed;
   top: 50%;
-  right: var(--sidebar-w);
+  right: 0;
   transform: translateY(-50%);
   width: 20px;
   height: 48px;
@@ -89,8 +93,8 @@ body.collapsed #sidebar {
 
 #collapse-btn:hover { color: var(--text); }
 
-body.collapsed #collapse-btn {
-  right: 0;
+body.sidebar-open #collapse-btn {
+  right: var(--sidebar-w);
 }
 
 /* ── Sidebar inner layout ── */
@@ -324,9 +328,10 @@ input[type=checkbox] {
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
-  #canvas { width: 100vw !important; }
+  /* Sidebar always overlays on mobile — canvas stays full width */
+  body.sidebar-open #canvas { width: 100vw; }
   #sidebar { transform: translateX(100%); box-shadow: none; }
-  body.mobile-open #sidebar {
+  body.sidebar-open #sidebar {
     transform: translateX(0);
     box-shadow: -4px 0 24px rgba(0,0,0,0.4);
   }
@@ -357,7 +362,7 @@ input[type=checkbox] {
         <button class="preset-swatch active" data-preset="mono"  style="background:linear-gradient(135deg,#f8f8f6,#d8d8d4)" aria-label="Mono"><span>Mono</span></button>
         <button class="preset-swatch"        data-preset="slate" style="background:linear-gradient(135deg,#edf2f7,#c5d3e8)" aria-label="Slate"><span>Slate</span></button>
         <button class="preset-swatch"        data-preset="sand"  style="background:linear-gradient(135deg,#faf3e6,#e8d9b8)" aria-label="Sand"><span>Sand</span></button>
-        <button class="preset-swatch"        data-preset="sage"  style="background:linear-gradient(135deg,#eaf3ec,#c0dbc5)" aria-label="Sage"><span>Sage</span></button>
+        <button class="preset-swatch"        data-preset="night" style="background:linear-gradient(135deg,#0a0a0f,#1a1a2e)" aria-label="Night"><span>Night</span></button>
       </div>
     </div>
 
@@ -417,6 +422,11 @@ input[type=checkbox] {
         <input type="checkbox" id="ctrl-show-comp" checked>
         <label for="ctrl-show-comp">Show composite numbers</label>
       </div>
+      <div class="ctrl-row">
+        <label for="ctrl-comp-r">Size</label>
+        <span class="val" id="ctrl-comp-r-val">1.0</span>
+      </div>
+      <input type="range" id="ctrl-comp-r" min="0.5" max="4" step="0.5" value="1.0">
       <div class="ctrl-row">
         <label for="ctrl-comp-opacity">Opacity</label>
         <span class="val" id="ctrl-comp-opacity-val">0.18</span>
@@ -486,10 +496,10 @@ const PHI = (1 + Math.sqrt(5)) / 2;
 const GOLDEN_ANGLE = TAU / (PHI * PHI); // ~2.39996 rad
 
 const PRESETS = {
-  mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, primeR:2.5, spiralScale:1, rotation:0 },
-  slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
-  sand:  { bgColor:'#faf3e6', primeColor:'#b84820', colorMode:'arc',    glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
-  sage:  { bgColor:'#eaf3ec', primeColor:'#1e5c3a', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
+  mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  sand:  { bgColor:'#faf3e6', primeColor:'#b84820', colorMode:'arc',    glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  night: { bgColor:'#0a0a0f', primeColor:'#7faaff', colorMode:'radial', glowIntensity:8, showComposites:true, compositeOpacity:0.08, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -502,6 +512,7 @@ const state = {
   glowIntensity: 0,
   showComposites: true,
   compositeOpacity: 0.18,
+  compositeR: 1.0,
   spiralScale: 1.0,
   rotation: 0,
   isPrime: null,
@@ -599,11 +610,9 @@ function buildGradient(ctx, cx, cy, maxR, st) {
       // Fallback for browsers without createConicGradient
       return st.primeColor;
     }
-    g.addColorStop(0,    `hsl(${h},           85%, 65%)`);
-    g.addColorStop(0.25, `hsl(${(h+60)%360},  85%, 65%)`);
-    g.addColorStop(0.5,  `hsl(${(h+120)%360}, 85%, 65%)`);
-    g.addColorStop(0.75, `hsl(${(h+200)%360}, 85%, 65%)`);
-    g.addColorStop(1.0,  `hsl(${h},           85%, 65%)`);
+    for (let i = 0; i <= 12; i++) {
+      g.addColorStop(i / 12, `hsl(${(h + i * 30) % 360},85%,65%)`);
+    }
     return g;
   }
   return st.primeColor;
@@ -618,6 +627,8 @@ function render(ctx, st, W, H, skipBg = false) {
   // Auto-scale so spiral fills canvas with 4% margin
   const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * st.spiralScale;
   const maxR = effectiveScale * Math.sqrt(N);
+  // Scale dot sizes proportionally with viewport so density stays constant
+  const viewScale = Math.min(W, H) / 800;
 
   // Background
   if (skipBg) {
@@ -637,7 +648,7 @@ function render(ctx, st, W, H, skipBg = false) {
     ctx.globalAlpha = st.compositeOpacity;
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.beginPath();
-    const compR = Math.max(0.6, st.primeR * 0.45);
+    const compR = st.compositeR * viewScale;
     for (let n = 4; n <= N; n++) {
       if (isPrime[n]) continue;
       const a = n * GOLDEN_ANGLE + rot;
@@ -654,34 +665,60 @@ function render(ctx, st, W, H, skipBg = false) {
   // ── Pass 2: Primes ──
   ctx.save();
   const glow = st.N > 20000 ? Math.min(st.glowIntensity, 20) : st.glowIntensity;
-  ctx.shadowColor = st.primeColor;
-  ctx.shadowBlur = glow;
-  ctx.beginPath();
-  for (let n = 2; n <= N; n++) {
-    if (!isPrime[n]) continue;
-    if (st.highlightedNums.has(n)) continue; // drawn in pass 3
-    const a = n * GOLDEN_ANGLE + rot;
-    const rr = effectiveScale * Math.sqrt(n);
-    const x = cx + rr * Math.cos(a);
-    const y = cy + rr * Math.sin(a);
-    ctx.moveTo(x + st.primeR, y);
-    ctx.arc(x, y, st.primeR, 0, TAU);
+  const primeR = st.primeR * viewScale;
+  const glowPx = glow * viewScale;
+
+  if (glowPx > 0 && st.colorMode !== 'solid') {
+    // Per-dot draw so glow colour matches each dot's gradient colour
+    ctx.shadowBlur = glowPx;
+    for (let n = 2; n <= N; n++) {
+      if (!isPrime[n]) continue;
+      if (st.highlightedNums.has(n)) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const rr = effectiveScale * Math.sqrt(n);
+      const x = cx + rr * Math.cos(a);
+      const y = cy + rr * Math.sin(a);
+      const color = dotColor(n, effectiveScale, maxR, st);
+      ctx.shadowColor = color;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, primeR, 0, TAU);
+      ctx.fill();
+    }
+  } else {
+    ctx.shadowColor = st.primeColor;
+    ctx.shadowBlur = glowPx;
+    ctx.beginPath();
+    for (let n = 2; n <= N; n++) {
+      if (!isPrime[n]) continue;
+      if (st.highlightedNums.has(n)) continue;
+      const a = n * GOLDEN_ANGLE + rot;
+      const rr = effectiveScale * Math.sqrt(n);
+      const x = cx + rr * Math.cos(a);
+      const y = cy + rr * Math.sin(a);
+      ctx.moveTo(x + primeR, y);
+      ctx.arc(x, y, primeR, 0, TAU);
+    }
+    ctx.fillStyle = st.colorMode === 'solid'
+      ? st.primeColor
+      : buildGradient(ctx, cx, cy, maxR, st);
+    ctx.fill();
   }
-  ctx.fillStyle = st.colorMode === 'solid'
-    ? st.primeColor
-    : buildGradient(ctx, cx, cy, maxR, st);
-  ctx.fill();
   ctx.restore();
 
   // ── Pass 3: Highlighted primes ──
   if (st.highlightedNums.size > 0) {
     ctx.save();
+    const hlR = st.highlightR * viewScale;
+    const hlGlow = st.highlightGlow * viewScale;
+    const hlRingOffset = st.highlightRingOffset * viewScale;
+    const hlRingWidth = st.highlightRingWidth * viewScale;
     ctx.shadowColor = st.highlightColor;
-    ctx.shadowBlur = st.highlightGlow;
+    ctx.shadowBlur = hlGlow;
 
-    if (st.highlightRingOffset > 0 && st.highlightRingWidth > 0) {
+    if (hlRingOffset > 0 && hlRingWidth > 0) {
       ctx.strokeStyle = st.highlightColor;
-      ctx.lineWidth = st.highlightRingWidth;
+      ctx.lineWidth = hlRingWidth;
       ctx.beginPath();
       for (const n of st.highlightedNums) {
         if (n < 2 || n > N || !isPrime[n]) continue;
@@ -689,7 +726,7 @@ function render(ctx, st, W, H, skipBg = false) {
         const rr = effectiveScale * Math.sqrt(n);
         const x = cx + rr * Math.cos(a);
         const y = cy + rr * Math.sin(a);
-        const ringR = st.highlightR + st.highlightRingOffset;
+        const ringR = hlR + hlRingOffset;
         ctx.moveTo(x + ringR, y);
         ctx.arc(x, y, ringR, 0, TAU);
       }
@@ -704,8 +741,8 @@ function render(ctx, st, W, H, skipBg = false) {
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
-      ctx.moveTo(x + st.highlightR, y);
-      ctx.arc(x, y, st.highlightR, 0, TAU);
+      ctx.moveTo(x + hlR, y);
+      ctx.arc(x, y, hlR, 0, TAU);
     }
     ctx.fill();
     ctx.restore();
@@ -719,9 +756,10 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2);
 let logicalW = 0, logicalH = 0;
 
 function resizeCanvas() {
-  const sidebar = document.getElementById('sidebar');
-  const sidebarVisible = !document.body.classList.contains('collapsed');
-  const sidebarW = sidebarVisible ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) : 0;
+  const isMobile = window.innerWidth <= 768;
+  const sidebarW = (!isMobile && document.body.classList.contains('sidebar-open'))
+    ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'))
+    : 0;
   logicalW = window.innerWidth - sidebarW;
   logicalH = window.innerHeight;
   canvas.style.width  = logicalW + 'px';
@@ -734,7 +772,7 @@ function resizeCanvas() {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'prime-spiral-v1';
-const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
+const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','compositeR','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
 
 function saveSettings() {
   const data = {};
@@ -765,6 +803,8 @@ function syncDomToState() {
   document.getElementById('ctrl-glow').value                   = state.glowIntensity;
   document.getElementById('ctrl-glow-val').textContent         = state.glowIntensity;
   document.getElementById('ctrl-show-comp').checked            = state.showComposites;
+  document.getElementById('ctrl-comp-r').value                 = state.compositeR;
+  document.getElementById('ctrl-comp-r-val').textContent       = state.compositeR.toFixed(1);
   document.getElementById('ctrl-comp-opacity').value           = state.compositeOpacity;
   document.getElementById('ctrl-comp-opacity-val').textContent = state.compositeOpacity.toFixed(2);
   document.getElementById('ctrl-prime-r').value                = state.primeR;
@@ -843,6 +883,15 @@ function initControls() {
     scheduleRender();
   });
 
+  // Composite size
+  const compRInput = document.getElementById('ctrl-comp-r');
+  const compRVal   = document.getElementById('ctrl-comp-r-val');
+  compRInput.addEventListener('input', () => {
+    state.compositeR = parseFloat(compRInput.value);
+    compRVal.textContent = state.compositeR.toFixed(1);
+    scheduleRender();
+  });
+
   // Show composites
   const showCompInput = document.getElementById('ctrl-show-comp');
   const compOpInput   = document.getElementById('ctrl-comp-opacity');
@@ -882,12 +931,8 @@ function initControls() {
   // Collapse button
   const collapseBtn = document.getElementById('collapse-btn');
   collapseBtn.addEventListener('click', () => {
-    if (window.innerWidth <= 768) {
-      document.body.classList.toggle('mobile-open');
-    } else {
-      document.body.classList.toggle('collapsed');
-      setTimeout(resizeCanvas, 220);
-    }
+    document.body.classList.toggle('sidebar-open');
+    setTimeout(resizeCanvas, 220);
   });
 
   // Highlight textarea — re-parse on change; also re-validate when N changes
@@ -965,6 +1010,8 @@ function applyPreset(name) {
   document.getElementById('ctrl-glow').value           = p.glowIntensity;
   document.getElementById('ctrl-glow-val').textContent = p.glowIntensity;
   document.getElementById('ctrl-show-comp').checked    = p.showComposites;
+  document.getElementById('ctrl-comp-r').value         = p.compositeR;
+  document.getElementById('ctrl-comp-r-val').textContent = p.compositeR.toFixed(1);
   document.getElementById('ctrl-comp-opacity').value   = p.compositeOpacity;
   document.getElementById('ctrl-comp-opacity-val').textContent = p.compositeOpacity.toFixed(2);
   document.getElementById('ctrl-prime-r').value        = p.primeR;
@@ -1011,8 +1058,7 @@ function dotColor(n, effectiveScale, maxR, st) {
   }
   if (st.colorMode === 'arc') {
     const norm = ((a % TAU) + TAU) % TAU / TAU;
-    const dh = norm * 200;
-    return `hsl(${(h + dh) % 360},85%,65%)`;
+    return `hsl(${(h + norm * 360) % 360},85%,65%)`;
   }
   return st.primeColor;
 }
@@ -1028,10 +1074,17 @@ function exportSvg() {
   const cx = W / 2, cy = H / 2;
   const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * state.spiralScale;
   const maxR = effectiveScale * Math.sqrt(N);
+  const viewScale = Math.min(W, H) / 800;
   const rot = state.rotation;
-  const compR = Math.max(0.6, state.primeR * 0.45);
+  const compR = state.compositeR * viewScale;
+  const svgPrimeR = state.primeR * viewScale;
+  const svgGlow = state.glowIntensity * viewScale;
+  const svgHlR = state.highlightR * viewScale;
+  const svgHlGlow = state.highlightGlow * viewScale;
+  const svgHlRingOffset = state.highlightRingOffset * viewScale;
+  const svgHlRingWidth = state.highlightRingWidth * viewScale;
   const [pr, pg, pb] = hexToRgb(state.primeColor);
-  const glow = state.glowIntensity;
+  const glow = svgGlow;
 
   const parts = [];
   parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
@@ -1075,7 +1128,7 @@ function exportSvg() {
     const x = (cx + r * Math.cos(a)).toFixed(2);
     const y = (cy + r * Math.sin(a)).toFixed(2);
     const fill = dotColor(n, effectiveScale, maxR, state);
-    parts.push(`<circle cx="${x}" cy="${y}" r="${state.primeR}" fill="${fill}"/>`);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${svgPrimeR.toFixed(2)}" fill="${fill}"/>`);
   }
   parts.push(`</g>`);
 
@@ -1086,7 +1139,7 @@ function exportSvg() {
     if (!parts.some(p => p.includes(hlFilterId))) {
       // Inject hl filter into defs or add new defs
       const defsEnd = parts.findIndex(p => p.includes('</defs>'));
-      const hlFilter = `<filter id="${hlFilterId}" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="${(hlGlow * 0.4).toFixed(1)}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+      const hlFilter = `<filter id="${hlFilterId}" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="${(svgHlGlow * 0.4).toFixed(1)}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
       if (defsEnd >= 0) {
         parts[defsEnd] = hlFilter + parts[defsEnd];
       } else {
@@ -1102,11 +1155,11 @@ function exportSvg() {
       const r = effectiveScale * Math.sqrt(n);
       const x = (cx + r * Math.cos(a)).toFixed(2);
       const y = (cy + r * Math.sin(a)).toFixed(2);
-      if (state.highlightRingOffset > 0 && state.highlightRingWidth > 0) {
-        const ringR = (state.highlightR + state.highlightRingOffset).toFixed(2);
-        parts.push(`<circle cx="${x}" cy="${y}" r="${ringR}" fill="none" stroke="${state.highlightColor}" stroke-width="${state.highlightRingWidth}"/>`);
+      if (svgHlRingOffset > 0 && svgHlRingWidth > 0) {
+        const ringR = (svgHlR + svgHlRingOffset).toFixed(2);
+        parts.push(`<circle cx="${x}" cy="${y}" r="${ringR}" fill="none" stroke="${state.highlightColor}" stroke-width="${svgHlRingWidth.toFixed(2)}"/>`);
       }
-      parts.push(`<circle cx="${x}" cy="${y}" r="${state.highlightR}" fill="${state.highlightColor}"/>`);
+      parts.push(`<circle cx="${x}" cy="${y}" r="${svgHlR.toFixed(2)}" fill="${state.highlightColor}"/>`);
     }
     parts.push(`</g>`);
   }
@@ -1129,12 +1182,16 @@ function init() {
     const hlTextarea = document.getElementById('ctrl-highlight-nums');
     if (hlTextarea.value) parseHighlights(hlTextarea.value);
   }
+  if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
   let lastKnownWidth = window.innerWidth;
+  let lastKnownHeight = window.innerHeight;
   resizeCanvas();
   window.addEventListener('resize', () => {
     const w = window.innerWidth;
-    if (w === lastKnownWidth && w <= 768) return;
+    const h = window.innerHeight;
+    if (w === lastKnownWidth && h === lastKnownHeight && w <= 768) return;
     lastKnownWidth = w;
+    lastKnownHeight = h;
     resizeCanvas();
   });
 }
