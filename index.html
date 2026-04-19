@@ -610,11 +610,9 @@ function buildGradient(ctx, cx, cy, maxR, st) {
       // Fallback for browsers without createConicGradient
       return st.primeColor;
     }
-    g.addColorStop(0,    `hsl(${h},           85%, 65%)`);
-    g.addColorStop(0.25, `hsl(${(h+60)%360},  85%, 65%)`);
-    g.addColorStop(0.5,  `hsl(${(h+120)%360}, 85%, 65%)`);
-    g.addColorStop(0.75, `hsl(${(h+200)%360}, 85%, 65%)`);
-    g.addColorStop(1.0,  `hsl(${h},           85%, 65%)`);
+    for (let i = 0; i <= 12; i++) {
+      g.addColorStop(i / 12, `hsl(${(h + i * 30) % 360},85%,65%)`);
+    }
     return g;
   }
   return st.primeColor;
@@ -1060,8 +1058,7 @@ function dotColor(n, effectiveScale, maxR, st) {
   }
   if (st.colorMode === 'arc') {
     const norm = ((a % TAU) + TAU) % TAU / TAU;
-    const dh = norm * 200;
-    return `hsl(${(h + dh) % 360},85%,65%)`;
+    return `hsl(${(h + norm * 360) % 360},85%,65%)`;
   }
   return st.primeColor;
 }
