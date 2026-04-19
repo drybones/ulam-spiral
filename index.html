@@ -423,6 +423,11 @@ input[type=checkbox] {
         <label for="ctrl-show-comp">Show composite numbers</label>
       </div>
       <div class="ctrl-row">
+        <label for="ctrl-comp-r">Size</label>
+        <span class="val" id="ctrl-comp-r-val">1.0</span>
+      </div>
+      <input type="range" id="ctrl-comp-r" min="0.5" max="4" step="0.5" value="1.0">
+      <div class="ctrl-row">
         <label for="ctrl-comp-opacity">Opacity</label>
         <span class="val" id="ctrl-comp-opacity-val">0.18</span>
       </div>
@@ -491,10 +496,10 @@ const PHI = (1 + Math.sqrt(5)) / 2;
 const GOLDEN_ANGLE = TAU / (PHI * PHI); // ~2.39996 rad
 
 const PRESETS = {
-  mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, primeR:2.5, spiralScale:1, rotation:0 },
-  slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
-  sand:  { bgColor:'#faf3e6', primeColor:'#b84820', colorMode:'arc',    glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
-  sage:  { bgColor:'#eaf3ec', primeColor:'#1e5c3a', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, primeR:2.5, spiralScale:1, rotation:0 },
+  mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  sand:  { bgColor:'#faf3e6', primeColor:'#b84820', colorMode:'arc',    glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
+  sage:  { bgColor:'#eaf3ec', primeColor:'#1e5c3a', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -507,6 +512,7 @@ const state = {
   glowIntensity: 0,
   showComposites: true,
   compositeOpacity: 0.18,
+  compositeR: 1.0,
   spiralScale: 1.0,
   rotation: 0,
   isPrime: null,
@@ -644,7 +650,7 @@ function render(ctx, st, W, H, skipBg = false) {
     ctx.globalAlpha = st.compositeOpacity;
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.beginPath();
-    const compR = Math.max(0.6 * viewScale, st.primeR * 0.45 * viewScale);
+    const compR = st.compositeR * viewScale;
     for (let n = 4; n <= N; n++) {
       if (isPrime[n]) continue;
       const a = n * GOLDEN_ANGLE + rot;
@@ -747,7 +753,7 @@ function resizeCanvas() {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'prime-spiral-v1';
-const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
+const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','compositeR','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
 
 function saveSettings() {
   const data = {};
@@ -778,6 +784,8 @@ function syncDomToState() {
   document.getElementById('ctrl-glow').value                   = state.glowIntensity;
   document.getElementById('ctrl-glow-val').textContent         = state.glowIntensity;
   document.getElementById('ctrl-show-comp').checked            = state.showComposites;
+  document.getElementById('ctrl-comp-r').value                 = state.compositeR;
+  document.getElementById('ctrl-comp-r-val').textContent       = state.compositeR.toFixed(1);
   document.getElementById('ctrl-comp-opacity').value           = state.compositeOpacity;
   document.getElementById('ctrl-comp-opacity-val').textContent = state.compositeOpacity.toFixed(2);
   document.getElementById('ctrl-prime-r').value                = state.primeR;
@@ -853,6 +861,15 @@ function initControls() {
   glowInput.addEventListener('input', () => {
     state.glowIntensity = parseFloat(glowInput.value);
     glowVal.textContent = glowInput.value;
+    scheduleRender();
+  });
+
+  // Composite size
+  const compRInput = document.getElementById('ctrl-comp-r');
+  const compRVal   = document.getElementById('ctrl-comp-r-val');
+  compRInput.addEventListener('input', () => {
+    state.compositeR = parseFloat(compRInput.value);
+    compRVal.textContent = state.compositeR.toFixed(1);
     scheduleRender();
   });
 
@@ -974,6 +991,8 @@ function applyPreset(name) {
   document.getElementById('ctrl-glow').value           = p.glowIntensity;
   document.getElementById('ctrl-glow-val').textContent = p.glowIntensity;
   document.getElementById('ctrl-show-comp').checked    = p.showComposites;
+  document.getElementById('ctrl-comp-r').value         = p.compositeR;
+  document.getElementById('ctrl-comp-r-val').textContent = p.compositeR.toFixed(1);
   document.getElementById('ctrl-comp-opacity').value   = p.compositeOpacity;
   document.getElementById('ctrl-comp-opacity-val').textContent = p.compositeOpacity.toFixed(2);
   document.getElementById('ctrl-prime-r').value        = p.primeR;
@@ -1039,7 +1058,7 @@ function exportSvg() {
   const maxR = effectiveScale * Math.sqrt(N);
   const viewScale = Math.min(W, H) / 800;
   const rot = state.rotation;
-  const compR = Math.max(0.6 * viewScale, state.primeR * 0.45 * viewScale);
+  const compR = state.compositeR * viewScale;
   const svgPrimeR = state.primeR * viewScale;
   const svgGlow = state.glowIntensity * viewScale;
   const svgHlR = state.highlightR * viewScale;
