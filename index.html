@@ -618,6 +618,8 @@ function render(ctx, st, W, H, skipBg = false) {
   // Auto-scale so spiral fills canvas with 4% margin
   const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * st.spiralScale;
   const maxR = effectiveScale * Math.sqrt(N);
+  // Scale dot sizes proportionally with viewport so density stays constant
+  const viewScale = Math.min(W, H) / 800;
 
   // Background
   if (skipBg) {
@@ -637,7 +639,7 @@ function render(ctx, st, W, H, skipBg = false) {
     ctx.globalAlpha = st.compositeOpacity;
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.beginPath();
-    const compR = Math.max(0.6, st.primeR * 0.45);
+    const compR = Math.max(0.6 * viewScale, st.primeR * 0.45 * viewScale);
     for (let n = 4; n <= N; n++) {
       if (isPrime[n]) continue;
       const a = n * GOLDEN_ANGLE + rot;
@@ -654,8 +656,9 @@ function render(ctx, st, W, H, skipBg = false) {
   // ── Pass 2: Primes ──
   ctx.save();
   const glow = st.N > 20000 ? Math.min(st.glowIntensity, 20) : st.glowIntensity;
+  const primeR = st.primeR * viewScale;
   ctx.shadowColor = st.primeColor;
-  ctx.shadowBlur = glow;
+  ctx.shadowBlur = glow * viewScale;
   ctx.beginPath();
   for (let n = 2; n <= N; n++) {
     if (!isPrime[n]) continue;
@@ -664,8 +667,8 @@ function render(ctx, st, W, H, skipBg = false) {
     const rr = effectiveScale * Math.sqrt(n);
     const x = cx + rr * Math.cos(a);
     const y = cy + rr * Math.sin(a);
-    ctx.moveTo(x + st.primeR, y);
-    ctx.arc(x, y, st.primeR, 0, TAU);
+    ctx.moveTo(x + primeR, y);
+    ctx.arc(x, y, primeR, 0, TAU);
   }
   ctx.fillStyle = st.colorMode === 'solid'
     ? st.primeColor
@@ -676,12 +679,16 @@ function render(ctx, st, W, H, skipBg = false) {
   // ── Pass 3: Highlighted primes ──
   if (st.highlightedNums.size > 0) {
     ctx.save();
+    const hlR = st.highlightR * viewScale;
+    const hlGlow = st.highlightGlow * viewScale;
+    const hlRingOffset = st.highlightRingOffset * viewScale;
+    const hlRingWidth = st.highlightRingWidth * viewScale;
     ctx.shadowColor = st.highlightColor;
-    ctx.shadowBlur = st.highlightGlow;
+    ctx.shadowBlur = hlGlow;
 
-    if (st.highlightRingOffset > 0 && st.highlightRingWidth > 0) {
+    if (hlRingOffset > 0 && hlRingWidth > 0) {
       ctx.strokeStyle = st.highlightColor;
-      ctx.lineWidth = st.highlightRingWidth;
+      ctx.lineWidth = hlRingWidth;
       ctx.beginPath();
       for (const n of st.highlightedNums) {
         if (n < 2 || n > N || !isPrime[n]) continue;
@@ -689,7 +696,7 @@ function render(ctx, st, W, H, skipBg = false) {
         const rr = effectiveScale * Math.sqrt(n);
         const x = cx + rr * Math.cos(a);
         const y = cy + rr * Math.sin(a);
-        const ringR = st.highlightR + st.highlightRingOffset;
+        const ringR = hlR + hlRingOffset;
         ctx.moveTo(x + ringR, y);
         ctx.arc(x, y, ringR, 0, TAU);
       }
@@ -704,8 +711,8 @@ function render(ctx, st, W, H, skipBg = false) {
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
-      ctx.moveTo(x + st.highlightR, y);
-      ctx.arc(x, y, st.highlightR, 0, TAU);
+      ctx.moveTo(x + hlR, y);
+      ctx.arc(x, y, hlR, 0, TAU);
     }
     ctx.fill();
     ctx.restore();
@@ -1028,10 +1035,17 @@ function exportSvg() {
   const cx = W / 2, cy = H / 2;
   const effectiveScale = (Math.min(W, H) * 0.48 / Math.sqrt(N)) * state.spiralScale;
   const maxR = effectiveScale * Math.sqrt(N);
+  const viewScale = Math.min(W, H) / 800;
   const rot = state.rotation;
-  const compR = Math.max(0.6, state.primeR * 0.45);
+  const compR = Math.max(0.6 * viewScale, state.primeR * 0.45 * viewScale);
+  const svgPrimeR = state.primeR * viewScale;
+  const svgGlow = state.glowIntensity * viewScale;
+  const svgHlR = state.highlightR * viewScale;
+  const svgHlGlow = state.highlightGlow * viewScale;
+  const svgHlRingOffset = state.highlightRingOffset * viewScale;
+  const svgHlRingWidth = state.highlightRingWidth * viewScale;
   const [pr, pg, pb] = hexToRgb(state.primeColor);
-  const glow = state.glowIntensity;
+  const glow = svgGlow;
 
   const parts = [];
   parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
@@ -1075,7 +1089,7 @@ function exportSvg() {
     const x = (cx + r * Math.cos(a)).toFixed(2);
     const y = (cy + r * Math.sin(a)).toFixed(2);
     const fill = dotColor(n, effectiveScale, maxR, state);
-    parts.push(`<circle cx="${x}" cy="${y}" r="${state.primeR}" fill="${fill}"/>`);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${svgPrimeR.toFixed(2)}" fill="${fill}"/>`);
   }
   parts.push(`</g>`);
 
@@ -1086,7 +1100,7 @@ function exportSvg() {
     if (!parts.some(p => p.includes(hlFilterId))) {
       // Inject hl filter into defs or add new defs
       const defsEnd = parts.findIndex(p => p.includes('</defs>'));
-      const hlFilter = `<filter id="${hlFilterId}" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="${(hlGlow * 0.4).toFixed(1)}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+      const hlFilter = `<filter id="${hlFilterId}" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="${(svgHlGlow * 0.4).toFixed(1)}" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
       if (defsEnd >= 0) {
         parts[defsEnd] = hlFilter + parts[defsEnd];
       } else {
@@ -1102,11 +1116,11 @@ function exportSvg() {
       const r = effectiveScale * Math.sqrt(n);
       const x = (cx + r * Math.cos(a)).toFixed(2);
       const y = (cy + r * Math.sin(a)).toFixed(2);
-      if (state.highlightRingOffset > 0 && state.highlightRingWidth > 0) {
-        const ringR = (state.highlightR + state.highlightRingOffset).toFixed(2);
-        parts.push(`<circle cx="${x}" cy="${y}" r="${ringR}" fill="none" stroke="${state.highlightColor}" stroke-width="${state.highlightRingWidth}"/>`);
+      if (svgHlRingOffset > 0 && svgHlRingWidth > 0) {
+        const ringR = (svgHlR + svgHlRingOffset).toFixed(2);
+        parts.push(`<circle cx="${x}" cy="${y}" r="${ringR}" fill="none" stroke="${state.highlightColor}" stroke-width="${svgHlRingWidth.toFixed(2)}"/>`);
       }
-      parts.push(`<circle cx="${x}" cy="${y}" r="${state.highlightR}" fill="${state.highlightColor}"/>`);
+      parts.push(`<circle cx="${x}" cy="${y}" r="${svgHlR.toFixed(2)}" fill="${state.highlightColor}"/>`);
     }
     parts.push(`</g>`);
   }
