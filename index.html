@@ -31,13 +31,13 @@ html, body {
 #canvas {
   position: fixed;
   top: 0; left: 0;
-  width: calc(100vw - var(--sidebar-w));
+  width: 100vw;
   height: 100vh;
   display: block;
 }
 
-body.collapsed #canvas {
-  width: 100vw;
+body.sidebar-open #canvas {
+  width: calc(100vw - var(--sidebar-w));
 }
 
 /* ── Sidebar ── */
@@ -60,14 +60,18 @@ body.collapsed #canvas {
   z-index: 100;
 }
 
-body.collapsed #sidebar {
+#sidebar {
   transform: translateX(var(--sidebar-w));
+}
+
+body.sidebar-open #sidebar {
+  transform: translateX(0);
 }
 
 #collapse-btn {
   position: fixed;
   top: 50%;
-  right: var(--sidebar-w);
+  right: 0;
   transform: translateY(-50%);
   width: 20px;
   height: 48px;
@@ -89,8 +93,8 @@ body.collapsed #sidebar {
 
 #collapse-btn:hover { color: var(--text); }
 
-body.collapsed #collapse-btn {
-  right: 0;
+body.sidebar-open #collapse-btn {
+  right: var(--sidebar-w);
 }
 
 /* ── Sidebar inner layout ── */
@@ -324,9 +328,10 @@ input[type=checkbox] {
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
-  #canvas { width: 100vw !important; }
+  /* Sidebar always overlays on mobile — canvas stays full width */
+  body.sidebar-open #canvas { width: 100vw; }
   #sidebar { transform: translateX(100%); box-shadow: none; }
-  body.mobile-open #sidebar {
+  body.sidebar-open #sidebar {
     transform: translateX(0);
     box-shadow: -4px 0 24px rgba(0,0,0,0.4);
   }
@@ -727,7 +732,7 @@ let logicalW = 0, logicalH = 0;
 
 function resizeCanvas() {
   const isMobile = window.innerWidth <= 768;
-  const sidebarW = (!isMobile && !document.body.classList.contains('collapsed'))
+  const sidebarW = (!isMobile && document.body.classList.contains('sidebar-open'))
     ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'))
     : 0;
   logicalW = window.innerWidth - sidebarW;
@@ -890,12 +895,8 @@ function initControls() {
   // Collapse button
   const collapseBtn = document.getElementById('collapse-btn');
   collapseBtn.addEventListener('click', () => {
-    if (window.innerWidth <= 768) {
-      document.body.classList.toggle('mobile-open');
-    } else {
-      document.body.classList.toggle('collapsed');
-      setTimeout(resizeCanvas, 220);
-    }
+    document.body.classList.toggle('sidebar-open');
+    setTimeout(resizeCanvas, 220);
   });
 
   // Highlight textarea — re-parse on change; also re-validate when N changes
@@ -1144,6 +1145,7 @@ function init() {
     const hlTextarea = document.getElementById('ctrl-highlight-nums');
     if (hlTextarea.value) parseHighlights(hlTextarea.value);
   }
+  if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
   let lastKnownWidth = window.innerWidth;
   resizeCanvas();
   window.addEventListener('resize', () => {
