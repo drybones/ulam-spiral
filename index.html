@@ -1184,11 +1184,14 @@ function init() {
   }
   if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
   let lastKnownWidth = window.innerWidth;
+  let lastKnownHeight = window.innerHeight;
   resizeCanvas();
   window.addEventListener('resize', () => {
     const w = window.innerWidth;
-    if (w === lastKnownWidth && w <= 768) return;
+    const h = window.innerHeight;
+    if (w === lastKnownWidth && h === lastKnownHeight && w <= 768) return;
     lastKnownWidth = w;
+    lastKnownHeight = h;
     resizeCanvas();
   });
 }
