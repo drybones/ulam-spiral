@@ -379,6 +379,19 @@ input[type=checkbox] {
 
     <div class="divider"></div>
 
+    <!-- Spiral mode -->
+    <div>
+      <div class="ctrl-row" style="margin-bottom:6px">
+        <label>Spiral</label>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-spiral-mode="golden">Sunflower</button>
+        <button class="mode-btn" data-spiral-mode="sacks">Sacks</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
     <!-- Colour -->
     <div>
       <div class="section-label">Colour</div>
@@ -495,6 +508,10 @@ const TAU = Math.PI * 2;
 const PHI = (1 + Math.sqrt(5)) / 2;
 const GOLDEN_ANGLE = TAU / (PHI * PHI); // ~2.39996 rad
 
+function spiralAngle(n, rot, mode) {
+  return (mode === 'sacks' ? n : n * GOLDEN_ANGLE) + rot;
+}
+
 const PRESETS = {
   mono:  { bgColor:'#f8f8f6', primeColor:'#1a1a1a', colorMode:'solid',  glowIntensity:0, showComposites:true, compositeOpacity:0.18, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
   slate: { bgColor:'#edf2f7', primeColor:'#2b4c8c', colorMode:'radial', glowIntensity:0, showComposites:true, compositeOpacity:0.12, compositeR:1.0, primeR:2.5, spiralScale:1, rotation:0 },
@@ -514,6 +531,7 @@ const state = {
   compositeOpacity: 0.18,
   compositeR: 1.0,
   spiralScale: 1.0,
+  spiralMode: 'golden',
   rotation: 0,
   isPrime: null,
   cachedN: 0,
@@ -651,7 +669,7 @@ function render(ctx, st, W, H, skipBg = false) {
     const compR = st.compositeR * viewScale;
     for (let n = 4; n <= N; n++) {
       if (isPrime[n]) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, st.spiralMode);
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
@@ -674,7 +692,7 @@ function render(ctx, st, W, H, skipBg = false) {
     for (let n = 2; n <= N; n++) {
       if (!isPrime[n]) continue;
       if (st.highlightedNums.has(n)) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, st.spiralMode);
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
@@ -692,7 +710,7 @@ function render(ctx, st, W, H, skipBg = false) {
     for (let n = 2; n <= N; n++) {
       if (!isPrime[n]) continue;
       if (st.highlightedNums.has(n)) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, st.spiralMode);
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
@@ -722,7 +740,7 @@ function render(ctx, st, W, H, skipBg = false) {
       ctx.beginPath();
       for (const n of st.highlightedNums) {
         if (n < 2 || n > N || !isPrime[n]) continue;
-        const a = n * GOLDEN_ANGLE + rot;
+        const a = spiralAngle(n, rot, st.spiralMode);
         const rr = effectiveScale * Math.sqrt(n);
         const x = cx + rr * Math.cos(a);
         const y = cy + rr * Math.sin(a);
@@ -737,7 +755,7 @@ function render(ctx, st, W, H, skipBg = false) {
     ctx.beginPath();
     for (const n of st.highlightedNums) {
       if (n < 2 || n > N || !isPrime[n]) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, st.spiralMode);
       const rr = effectiveScale * Math.sqrt(n);
       const x = cx + rr * Math.cos(a);
       const y = cy + rr * Math.sin(a);
@@ -772,7 +790,7 @@ function resizeCanvas() {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'prime-spiral-v1';
-const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','primeR','glowIntensity','showComposites','compositeOpacity','compositeR','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
+const PERSIST_KEYS = ['N','primeColor','bgColor','colorMode','spiralMode','primeR','glowIntensity','showComposites','compositeOpacity','compositeR','highlightColor','highlightR','highlightGlow','highlightRingOffset','highlightRingWidth','transparentBg'];
 
 function saveSettings() {
   const data = {};
@@ -821,6 +839,9 @@ function syncDomToState() {
   document.getElementById('ctrl-transparent-bg').checked           = state.transparentBg;
   document.querySelectorAll('[data-color-mode]').forEach(b => {
     b.classList.toggle('active', b.dataset.colorMode === state.colorMode);
+  });
+  document.querySelectorAll('[data-spiral-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.spiralMode === state.spiralMode);
   });
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
   if (state.highlightedNums.size > 0) {
@@ -907,6 +928,16 @@ function initControls() {
     state.compositeOpacity = parseFloat(compOpInput.value);
     compOpVal.textContent = parseFloat(compOpInput.value).toFixed(2);
     scheduleRender();
+  });
+
+  // Spiral mode buttons
+  document.querySelectorAll('[data-spiral-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.spiralMode = btn.dataset.spiralMode;
+      document.querySelectorAll('[data-spiral-mode]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduleRender();
+    });
   });
 
   // Color mode buttons
@@ -1048,7 +1079,7 @@ function exportPng() {
 function dotColor(n, effectiveScale, maxR, st) {
   const [h] = hexToHsl(st.primeColor);
   if (st.colorMode === 'solid') return st.primeColor;
-  const a = n * GOLDEN_ANGLE + st.rotation;
+  const a = spiralAngle(n, st.rotation, st.spiralMode);
   const r = effectiveScale * Math.sqrt(n);
   if (st.colorMode === 'radial') {
     const t = r / maxR;
@@ -1108,7 +1139,7 @@ function exportSvg() {
     parts.push(`<g opacity="${state.compositeOpacity.toFixed(3)}" fill="rgb(${pr},${pg},${pb})">`);
     for (let n = 4; n <= N; n++) {
       if (isPrime[n]) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, state.spiralMode);
       const r = effectiveScale * Math.sqrt(n);
       const x = (cx + r * Math.cos(a)).toFixed(2);
       const y = (cy + r * Math.sin(a)).toFixed(2);
@@ -1123,7 +1154,7 @@ function exportSvg() {
   for (let n = 2; n <= N; n++) {
     if (!isPrime[n]) continue;
     if (state.highlightedNums.has(n)) continue;
-    const a = n * GOLDEN_ANGLE + rot;
+    const a = spiralAngle(n, rot, state.spiralMode);
     const r = effectiveScale * Math.sqrt(n);
     const x = (cx + r * Math.cos(a)).toFixed(2);
     const y = (cy + r * Math.sin(a)).toFixed(2);
@@ -1151,7 +1182,7 @@ function exportSvg() {
     parts.push(`<g${hlFilterAttr}>`);
     for (const n of state.highlightedNums) {
       if (n < 2 || n > N || !isPrime[n]) continue;
-      const a = n * GOLDEN_ANGLE + rot;
+      const a = spiralAngle(n, rot, state.spiralMode);
       const r = effectiveScale * Math.sqrt(n);
       const x = (cx + r * Math.cos(a)).toFixed(2);
       const y = (cy + r * Math.sin(a)).toFixed(2);
